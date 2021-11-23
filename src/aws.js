@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const core = require('@actions/core');
 const config = require('./config');
+const github = require('@actions/github');
 
 // User data scripts are run as the root user
 function buildUserDataScript(githubRegistrationToken, label) {
@@ -29,9 +30,16 @@ function buildUserDataScript(githubRegistrationToken, label) {
   );
 }
 
+function makeMetadataTags(label) {
+    const { owner, repo } = github.context.repo;
+    const url = `${github.context.serverUrl}/${owner}/${repo}`
+    return [ { Key: "Ec2GithubRunner:Url", Value: url }, { Key: "Ec2GithubRunner:Label", Value: label }, ];
+}
+
 async function startEc2Instance(label, githubRegistrationToken) {
   const ec2 = new AWS.EC2();
 
+  config.input.tags.push( ...makeMetadataTags(label) );
   const userData = buildUserDataScript(githubRegistrationToken, label);
 
   const params = {
