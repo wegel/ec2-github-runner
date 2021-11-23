@@ -4,32 +4,29 @@ const config = require('./config');
 
 // User data scripts are run as the root user
 function buildUserDataScript(githubRegistrationToken, label) {
+  const userdata_prefix = [
+      '#!/bin/bash',
+  ];
   if (config.input.runnerHomeDir) {
     // If runner home directory is specified, we expect the actions-runner software (and dependencies)
     // to be pre-installed in the AMI, so we simply cd into that directory and then start the runner
-    return [
-      '#!/bin/bash',
-      `cd "${config.input.runnerHomeDir}"`,
-      'export RUNNER_ALLOW_RUNASROOT=1',
-      'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
-      'export INSTANCE_ID=$(cat /var/lib/cloud/data/instance-id)',
-      `./config.sh --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --name "$INSTANCE_ID" --labels ${label}`,
-      './run.sh',
-    ];
+    userdata_prefix.push(`cd "${config.input.runnerHomeDir}"`);
   } else {
-    return [
-      '#!/bin/bash',
-      'mkdir actions-runner && cd actions-runner',
+    userdata_prefix.push(
+      'mkdir -p actions-runner && cd actions-runner',
       'case $(uname -m) in aarch64) ARCH="arm64" ;; amd64|x86_64) ARCH="x64" ;; esac && export RUNNER_ARCH=${ARCH}',
       'curl -O -L https://github.com/actions/runner/releases/download/v2.280.3/actions-runner-linux-${RUNNER_ARCH}-2.280.3.tar.gz',
       'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.280.3.tar.gz',
-      'export RUNNER_ALLOW_RUNASROOT=1',
-      'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
-      'export INSTANCE_ID=$(cat /var/lib/cloud/data/instance-id)',
-      `./config.sh --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --name "$INSTANCE_ID" --labels ${label}`,
-      './run.sh',
-    ];
+    );
   }
+  // push returns new size of array, so don't use its result as the function return value
+  return userdata_prefix.concat(
+    'export RUNNER_ALLOW_RUNASROOT=1',
+    'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
+    'export INSTANCE_ID=$(cat /var/lib/cloud/data/instance-id)',
+    `./config.sh --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --name "$INSTANCE_ID" --labels ${label}`,
+    './run.sh',
+  );
 }
 
 async function startEc2Instance(label, githubRegistrationToken) {
