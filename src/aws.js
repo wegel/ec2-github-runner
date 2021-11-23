@@ -22,10 +22,16 @@ function buildUserDataScript(githubRegistrationToken, label) {
   }
   // push returns new size of array, so don't use its result as the function return value
   return userdata_prefix.concat(
+    'export INSTANCE_ID=$(cat /var/lib/cloud/data/instance-id)',
+    'TOKEN_HEADER="X-aws-ec2-metadata-token: $(curl -sX PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")"',
+    'export AWS_DEFAULT_REGION="$(curl -sH "$TOKEN_HEADER" http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e"s/[a-z]*\$//")"',
+    // yikes
+    // avoid `aws ec2 ... | while read`, since the pipeline starts a subshell for the `while`
+    // so variables set in the loop disappear when it's done
+    'while read key value; do declare RUNNER_$(echo -n "$key" | tr [:lower:] [:upper:] | tr -cs [:alnum:] _ )="$value"; done < <(aws ec2 describe-tags --output text --filter Name=resource-id,Values="$INSTANCE_ID" --query "Tags[?starts_with(Key, \\`Ec2GithubRunner:\\`)].[Key, Value]" --output text | cut -f2- -d:)',
     'export RUNNER_ALLOW_RUNASROOT=1',
     'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
-    'export INSTANCE_ID=$(cat /var/lib/cloud/data/instance-id)',
-    `./config.sh --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --name "$INSTANCE_ID" --labels ${label}`,
+    `./config.sh --url "$RUNNER_URL" --token ${githubRegistrationToken} --name "$INSTANCE_ID" --labels "$RUNNER_LABEL"`,
     './run.sh',
   );
 }
@@ -40,7 +46,7 @@ async function startEc2Instance(label, githubRegistrationToken) {
   const ec2 = new AWS.EC2();
 
   config.input.tags.push( ...makeMetadataTags(label) );
-  const userData = buildUserDataScript(githubRegistrationToken, label);
+  const userData = buildUserDataScript(githubRegistrationToken);
 
   const params = {
     MinCount: config.input.runnerCount,
