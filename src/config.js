@@ -16,13 +16,8 @@ class Config {
       runnerHomeDir: core.getInput('runner-home-dir'),
       runnerCount: core.getInput('runner-count'),
       ec2LaunchTemplate: core.getInput('ec2-launch-template'),
+      tags: JSON.parse(core.getInput('aws-resource-tags')),
     };
-
-    const tags = JSON.parse(core.getInput('aws-resource-tags'));
-    this.tagSpecifications = null;
-    if (tags.length > 0) {
-      this.tagSpecifications = [{ResourceType: 'instance', Tags: tags}, {ResourceType: 'volume', Tags: tags}];
-    }
 
     // the values of github.context.repo.owner and github.context.repo.repo are taken from
     // the environment variable GITHUB_REPOSITORY specified in "owner/repo" format and
@@ -61,6 +56,15 @@ class Config {
 
   generateUniqueLabel() {
     return Math.random().toString(36).substr(2, 5);
+  }
+
+  get tagSpecifications() {
+    var tagSpecifications = null;
+    const tags = this.input.tags;
+    if (tags.length > 0) {
+      tagSpecifications = [{ResourceType: 'instance', Tags: tags}, {ResourceType: 'volume', Tags: tags}];
+    }
+    return tagSpecifications;
   }
 }
 

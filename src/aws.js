@@ -1,41 +1,54 @@
 const AWS = require('aws-sdk');
 const core = require('@actions/core');
 const config = require('./config');
+const github = require('@actions/github');
 
 // User data scripts are run as the root user
 function buildUserDataScript(githubRegistrationToken, label) {
+  const userdata_prefix = [
+      '#!/bin/bash',
+  ];
   if (config.input.runnerHomeDir) {
     // If runner home directory is specified, we expect the actions-runner software (and dependencies)
     // to be pre-installed in the AMI, so we simply cd into that directory and then start the runner
-    return [
-      '#!/bin/bash',
-      `cd "${config.input.runnerHomeDir}"`,
-      'export RUNNER_ALLOW_RUNASROOT=1',
-      'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
-      'export INSTANCE_ID=$(cat /var/lib/cloud/data/instance-id)',
-      `./config.sh --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --name "$INSTANCE_ID" --labels ${label}`,
-      './run.sh',
-    ];
+    userdata_prefix.push(`cd "${config.input.runnerHomeDir}"`);
   } else {
-    return [
-      '#!/bin/bash',
-      'mkdir actions-runner && cd actions-runner',
-      'case $(uname -m) in aarch64) ARCH="arm64" ;; amd64|x86_64) ARCH="x64" ;; esac && export RUNNER_ARCH=${ARCH}',
+    userdata_prefix.push(
+      'mkdir -p actions-runner && cd actions-runner',
+      'case $(uname -m) in aarch64) RUNNER_ARCH="arm64" ;; amd64|x86_64) RUNNER_ARCH="x64" ;; esac && export RUNNER_ARCH',
       'curl -O -L https://github.com/actions/runner/releases/download/v2.280.3/actions-runner-linux-${RUNNER_ARCH}-2.280.3.tar.gz',
       'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.280.3.tar.gz',
-      'export RUNNER_ALLOW_RUNASROOT=1',
-      'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
-      'export INSTANCE_ID=$(cat /var/lib/cloud/data/instance-id)',
-      `./config.sh --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --name "$INSTANCE_ID" --labels ${label}`,
-      './run.sh',
-    ];
+    );
   }
+  // push returns new size of array, so don't use its result as the function return value
+  return userdata_prefix.concat(
+    'INSTANCE_ID=$(cat /var/lib/cloud/data/instance-id)',
+    'TOKEN_HEADER="X-aws-ec2-metadata-token: $(curl -sX PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")"',
+    'AWS_DEFAULT_REGION="$(curl -sH "$TOKEN_HEADER" http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e"s/[a-z]*\$//")"',
+    'export AWS_DEFAULT_REGION',
+    // yikes
+    // avoid `aws ec2 ... | while read`, since the pipeline starts a subshell for the `while`
+    // so variables set in the loop disappear when it's done
+    'while read -r key value; do declare "RUNNER_$(echo -n "$key" | tr \'[:lower:]\' \'[:upper:]\' | tr -cs \'[:alnum:]\' _ )"="$value"; done < <(aws ec2 describe-tags --output text --filter Name=resource-id,Values="$INSTANCE_ID" --query "Tags[?starts_with(Key, \\`Ec2GithubRunner:\\`)].[Key, Value]" --output text | cut -f2- -d:)',
+    'RUNNER_ALLOW_RUNASROOT=1',
+    'DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
+    'export RUNNER_ALLOW_RUNASROOT DOTNET_SYSTEM_GLOBALIZATION_INVARIANT',
+    `./config.sh --url "$RUNNER_URL" --token ${githubRegistrationToken} --name "$INSTANCE_ID" --labels "$RUNNER_LABEL"`,
+    './run.sh',
+  );
+}
+
+function makeMetadataTags(label) {
+    const { owner, repo } = github.context.repo;
+    const url = `${github.context.serverUrl}/${owner}/${repo}`
+    return [ { Key: "Ec2GithubRunner:Url", Value: url }, { Key: "Ec2GithubRunner:Label", Value: label }, ];
 }
 
 async function startEc2Instance(label, githubRegistrationToken) {
   const ec2 = new AWS.EC2();
 
-  const userData = buildUserDataScript(githubRegistrationToken, label);
+  config.input.tags.push( ...makeMetadataTags(label) );
+  const userData = buildUserDataScript(githubRegistrationToken);
 
   const params = {
     MinCount: config.input.runnerCount,
