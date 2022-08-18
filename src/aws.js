@@ -14,10 +14,14 @@ function buildUserDataScript(githubRegistrationToken, label) {
     userdata_prefix.push(`cd "${config.input.runnerHomeDir}"`);
   } else {
     userdata_prefix.push(
+      'if [ ! -d actions-runner]; then',
       'mkdir -p actions-runner && cd actions-runner',
       'case $(uname -m) in aarch64) RUNNER_ARCH="arm64" ;; amd64|x86_64) RUNNER_ARCH="x64" ;; esac && export RUNNER_ARCH',
       'curl -O -L https://github.com/actions/runner/releases/download/v2.280.3/actions-runner-linux-${RUNNER_ARCH}-2.280.3.tar.gz',
       'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.280.3.tar.gz',
+      'else',
+      'cd actions-runner',
+      'fi',
     );
   }
   // push returns new size of array, so don't use its result as the function return value
