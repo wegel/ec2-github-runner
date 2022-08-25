@@ -34,15 +34,28 @@ async function startEc2Instance(label, githubRegistrationToken) {
     yaml.load(config.input.ec2LaunchParams)
   );
 
-  try {
-    const result = await ec2.runInstances(params).promise();
-    const ec2InstanceId = result.Instances[0].InstanceId;
-    core.info(`AWS EC2 instance ${ec2InstanceId} is started`);
-    return ec2InstanceId;
-  } catch (error) {
-    core.error('AWS EC2 instance starting error');
-    throw error;
+  let paramsList = [params]
+  if (config.input.ec2TrySpotFirst === 'true') {
+    const spotParams = Object.assign({}, params, { InstanceMarketOptions: { MarketType: 'spot' }});
+    paramsList = [spotParams, params]
   }
+
+  let lastError = null;
+  for(let i = 0; i < paramsList.length; i++) {
+    core.info(`Trying launch parameters ${i + 1} of ${paramsList.length}`);
+    try {
+      const result = await ec2.runInstances(paramsList[i]).promise();
+      const ec2InstanceId = result.Instances[0].InstanceId;
+      core.info(`AWS EC2 instance ${ec2InstanceId} is started`);
+      return ec2InstanceId;
+    } catch (error) {
+      lastError = error;
+      core.warning(`AWS EC2 instance start error: ${error.message}`);
+    }
+  }
+
+  core.error('AWS EC2 instance starting error');
+  throw lastError;
 }
 
 async function terminateEc2Instance() {

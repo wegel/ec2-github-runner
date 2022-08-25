@@ -34,7 +34,11 @@ inputs:
     required: false
   ec2-launch-params:
     description: >-
-      EC2 launch params. See https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#runInstances-property for all possible properties.
+      EC2 launch params as a YAML string. See https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#runInstances-property for all possible properties.
+    required: true
+  ec2-try-spot-first:
+    description: >-
+      Set to 'true' if you want to automatically try to boot a Spot instance first.
     required: false
 outputs:
   label:

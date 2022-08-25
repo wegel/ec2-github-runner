@@ -9,7 +9,8 @@ class Config {
       label: core.getInput('label', { required: false }),
       ec2InstanceId: core.getInput('ec2-instance-id', { required: false }),
       runnerHomeDir: core.getInput('runner-home-dir', { required: false }) || 'actions-runner',
-      ec2LaunchParams: core.getInput('ec2-launch-params', { required: false }),
+      ec2LaunchParams: core.getInput('ec2-launch-params', { required: true }),
+      ec2TrySpotFirst: core.getInput('ec2-try-spot-first', { required: false }),
     };
 
     const tags = JSON.parse(core.getInput('aws-resource-tags'));

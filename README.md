@@ -198,7 +198,7 @@ Now you're ready to go!
 | `aws-resource-tags`                                                                                                                                                          | Optional. Used only with the `start` mode. | Specifies tags to add to the EC2 instance and any attached storage. <br><br> This field is a stringified JSON array of tag objects, each containing a `Key` and `Value` field (see example below). <br><br> Setting this requires additional AWS permissions for the role launching the instance (see above).                         |
 | `runner-home-dir`                                                                                                                                                            | Optional. Used only with the `start` mode. | Specifies a directory where pre-installed actions-runner software and scripts are located.<br><br> |
 | `ec2-launch-params`                                                                                                                                                        | Optional. Used only with the `start` mode. | Specifies options to launch the EC2 instance; this is where you set the AMI Id, the VPC Id, the subnet Id, etc. Check here for all the possible parameters.<br><br> |
-
+| `ec2-try-spot-first`                                                                                                                                                        | Optional. Used only with the `start` mode. | Set to 'true' if you want to automatically try to boot a Spot instance first.<br><br> |
 
 ### Environment variables
 
